@@ -10,3 +10,4 @@ openai
 openpyxl
 xlrd
 pyarrow
+pillow
