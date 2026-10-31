@@ -1,0 +1,16 @@
+# secrets: never upload your API key
+.env
+
+# Python environment and caches
+venv/
+__pycache__/
+*.pyc
+
+# generated and bulky files
+outputs/
+*.zip
+*.backup
+background_preview*
+
+# editor settings
+.vscode/

@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DATADUO | Analyse a table of data in one pass</title>
+<meta name="description" content="DATADUO cleans a CSV, Excel, JSON or SQLite table, finds the patterns that matter, tests prediction models against a plain baseline and writes a six-page report.">
+<style>
+:root{
+  /* change the whole mood here */
+  --bg:#07120E;          /* deep pine */
+  --bg-deep:#040B08;
+  --surface:#0D1B15;
+  --surface-2:#13261D;
+  --line:#26392F;
+  --text:#E8E4D8;
+  --muted:#9AA99F;
+  --accent:#E3A857;      /* amber */
+  --good:#7FD1A0;
+  --bad:#E8604C;
+  --serif:Georgia,"Times New Roman",serif;
+  --sans:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"SF Mono","Menlo","Consolas","Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:auto}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.6}
+a{color:var(--accent)}
+#bg{position:fixed;inset:0;width:100vw;height:100vh;display:block;z-index:0}
+.vignette{position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(120% 100% at 68% 50%,rgba(7,18,14,0) 38%,rgba(4,11,8,.88) 100%)}
+.no-webgl #bg{display:none}
+.no-webgl .vignette{background:radial-gradient(90% 70% at 70% 40%,#14281F 0%,var(--bg) 70%)}
+.skip{position:absolute;left:-999px;top:8px;background:var(--accent);color:#1A1205;padding:8px 12px;font:600 12px var(--mono);z-index:30}
+.skip:focus{left:8px}
+
+/* top bar */
+.top{position:fixed;top:0;left:1000;right:0;height:56px;z-index:20;background:var(--bg);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;padding:0 24px}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:#fff}
+.brand b{font:400 18px var(--mono);letter-spacing:.08em}
+.top nav{display:flex;gap:6px}
+.top nav a{font:12px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-decoration:none;
+  padding:8px 12px;border:1px solid transparent;border-radius:2px;transition:color .15s,border-color .15s}
+.top nav a:hover,.top nav a:focus-visible{color:var(--accent);border-color:var(--line)}
+a:focus-visible,button:focus-visible,input:focus-visible+label{outline:2px solid var(--accent);outline-offset:2px}
+
+main{position:relative;z-index:2}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+.eyebrow{font:12px var(--mono);text-transform:uppercase;letter-spacing:.14em;color:var(--accent);margin:0 0 16px}
+h1,h2,h3{font-family:var(--serif);font-weight:400;color:#F4F0E4;margin:0}
+h1{font-size:clamp(40px,5.8vw,70px);line-height:1.05;letter-spacing:-.01em;max-width:620px}
+h2{font-size:clamp(28px,3.6vw,40px);line-height:1.15;margin-bottom:14px}
+h3{font-size:22px;line-height:1.25;margin-bottom:8px}
+.lede{font-size:18px;line-height:1.6;color:#CFCBBE;max-width:540px;margin:22px 0 30px}
+.mono{font-family:var(--mono)}
+
+.btn{display:inline-block;padding:13px 18px;border:1px solid var(--line);border-radius:2px;background:transparent;color:var(--text);
+  font:600 12px var(--mono);text-transform:uppercase;letter-spacing:.08em;text-decoration:none;cursor:pointer;
+  transition:background-color .15s,color .15s,border-color .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#1A1205}
+.btn.primary:hover{background:#F2BF78;border-color:#F2BF78;color:#1A1205}
+.row{display:flex;flex-wrap:wrap;gap:10px}
+.formats{margin-top:26px;font:12px var(--mono);color:var(--muted);letter-spacing:.04em;max-width:540px}
+
+/* hero */
+.hero{min-height:100vh;display:flex;align-items:center;padding:96px 0 48px}
+
+/* process */
+.section-head{padding:110px 0 30px}
+.section-head p{color:#CFCBBE;max-width:560px;margin:0}
+.step{min-height:82vh;display:flex;align-items:center}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:2px;padding:28px;max-width:520px}
+.panel p{margin:0 0 12px;color:#D4D0C3}
+.panel .num{font:12px var(--mono);color:var(--accent);letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;display:block}
+.panel .behind{font:11px var(--mono);color:var(--muted);letter-spacing:.06em;text-transform:uppercase;border-top:1px solid var(--line);padding-top:12px;margin:16px 0 0}
+
+/* reports */
+.block{padding:110px 0 80px}
+.grid2{display:grid;grid-template-columns:300px 1fr;gap:24px;align-items:start;margin-top:28px}
+.list{display:flex;flex-direction:column;gap:6px}
+.list button{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:2px;
+  color:var(--text);padding:12px 14px;cursor:pointer;font:14px var(--sans);transition:background-color .15s,color .15s,border-color .15s}
+.list button span{display:block;font:11px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px}
+.list button:hover{border-color:var(--accent)}
+.list button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#1A1205}
+.list button[aria-pressed="true"] span{color:#4A3412}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:2px;padding:20px}
+.card h3{margin-bottom:4px}
+.card .q{color:#CFCBBE;margin:0 0 14px}
+.wire{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:2px;background:var(--bg)}
+.fine{font:12px var(--mono);color:var(--muted);line-height:1.6;margin:14px 0 0}
+
+/* audience */
+.toggle{display:flex;gap:6px;margin:6px 0 18px}
+.toggle button{background:var(--surface);border:1px solid var(--line);border-radius:2px;color:var(--text);padding:10px 16px;cursor:pointer;
+  font:600 12px var(--mono);text-transform:uppercase;letter-spacing:.08em;transition:background-color .15s,color .15s,border-color .15s}
+.toggle button:hover{border-color:var(--accent);color:var(--accent)}
+.toggle button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#1A1205}
+.chart-note{border-left:1px solid var(--accent);padding:2px 0 2px 12px;margin:14px 0 0;color:#D4D0C3;font-size:15px}
+ul.plain{margin:0;padding-left:18px;color:#D4D0C3} ul.plain li{margin:6px 0}
+
+/* start */
+.drop{display:block;border:1px dashed var(--line);border-radius:2px;background:var(--surface);padding:34px 20px;text-align:center;cursor:pointer;
+  color:var(--muted);font:13px var(--mono);transition:border-color .15s,color .15s,background-color .15s}
+.drop:hover,.drop.over{border-color:var(--accent);color:var(--accent);background:var(--surface-2)}
+.drop{position:relative}
+.drop input{position:absolute;opacity:0;width:1px;height:1px}
+.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.status{font:13px var(--mono);color:var(--muted);margin:14px 0 0;min-height:1.6em}
+
+footer{position:relative;z-index:2;border-top:1px solid var(--line);background:var(--bg);padding:28px 24px;color:var(--muted);font:12px var(--mono)}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;padding:0}
+
+@media (max-width:900px){
+  .grid2{grid-template-columns:1fr}
+  .top nav a:not(.keep){display:none}
+  .hero{min-height:92vh}
+  .panel{max-width:none}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<canvas id="bg" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<header class="top">
+  <a class="brand" href="#top" aria-label="DATADUO, back to top">
+    <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true">
+      <circle cx="20" cy="20" r="18.5" fill="none" stroke="#E8E4D8" stroke-width="1.6"/>
+      <rect x="11" y="22" width="4" height="8" fill="#E3A857"/><rect x="18" y="16" width="4" height="14" fill="#E3A857"/><rect x="25" y="10" width="4" height="20" fill="#E3A857"/>
+    </svg>
+    <b>DATADUO</b>
+  </a>
+  <nav aria-label="Sections">
+    <a href="#process">Process</a>
+    <a href="#reports">Reports</a>
+    <a href="#audience">Audience</a>
+    <a class="keep" href="#start">Try it</a>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="hero" id="top" data-stage="0">
+    <div class="wrap">
+      <p class="eyebrow">Automated data analysis</p>
+      <h1>Analyse a table of data in one pass</h1>
+      <p class="lede">Load a CSV, Excel, JSON or SQLite file. DATADUO cleans it, finds the patterns that matter, tests prediction models against a plain baseline and writes a report you can send.</p>
+      <div class="row">
+        <a class="btn primary" href="#start">Try it with a file</a>
+        <a class="btn" href="#reports">See the six report pages</a>
+      </div>
+      <p class="formats">Accepts CSV, TSV, Excel, JSON, Parquet, SQLite and Google Sheets links.</p>
+    </div>
+  </section>
+
+  <section id="process">
+    <div class="wrap section-head">
+      <p class="eyebrow">Process</p>
+      <h2>What happens to your data</h2>
+      <p>Four stages, in this order. The shape of particles behind the page changes with each one.</p>
+    </div>
+    <article class="step" data-stage="0"><div class="wrap"><div class="panel">
+      <span class="num">01 Load</span>
+      <h3>Read the file and recognise the columns</h3>
+      <p>Upload a file or paste a link. Column roles such as date, sales, product and region are recognised from their names, and you can correct any guess before the analysis runs.</p>
+      <p class="behind">Shown behind: scattered rows</p>
+    </div></div></article>
+    <article class="step" data-stage="1"><div class="wrap"><div class="panel">
+      <span class="num">02 Clean</span>
+      <h3>Fix what can be fixed, and say so</h3>
+      <p>Duplicate rows are removed. Columns that are mostly empty are replaced by a yes or no flag, and smaller gaps are filled with the median or the most common value. Every change is written to a log.</p>
+      <p class="behind">Shown behind: an ordered table</p>
+    </div></div></article>
+    <article class="step" data-stage="2"><div class="wrap"><div class="panel">
+      <span class="num">03 Analyse</span>
+      <h3>Charts in the order people ask questions</h3>
+      <p>Sales data gets six report pages. Any other table gets charts for the gaps in the data, the outcome you chose and the factors that matter most. Every chart has a one or two sentence note under it.</p>
+      <p class="behind">Shown behind: a bar chart</p>
+    </div></div></article>
+    <article class="step" data-stage="3"><div class="wrap"><div class="panel">
+      <span class="num">04 Predict and report</span>
+      <h3>Models are compared with a plain guess</h3>
+      <p>Several models are tested with 5-fold cross-validation. The report says in one sentence whether the best model is clearly better than guessing, and lists the factors it relies on.</p>
+      <p class="behind">Shown behind: a fitted surface with data points</p>
+    </div></div></article>
+  </section>
+
+  <section id="reports" class="block" data-stage="2">
+    <div class="wrap">
+      <p class="eyebrow">Reports</p>
+      <h2>Six report pages, one question each</h2>
+      <p style="color:#CFCBBE;max-width:600px;margin:0">Each page is a 16:9 layout with a column of key figures and a grid of charts. Pick a page to see what it contains.</p>
+      <div class="grid2">
+        <div class="list" id="pagelist" role="group" aria-label="Report pages"></div>
+        <div class="card">
+          <h3 id="pgname"></h3>
+          <p class="q" id="pgq"></p>
+          <svg class="wire" id="wire" viewBox="0 0 640 360" role="img" aria-label="Layout of the selected report page"></svg>
+          <p class="fine" id="pgextra"></p>
+          <p class="fine">Chart names are the ones built from a sales table. Key figures are shown as labels only.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="audience" class="block" data-stage="3">
+    <div class="wrap">
+      <p class="eyebrow">Audience</p>
+      <h2>One analysis, two ways to read it</h2>
+      <p style="color:#CFCBBE;max-width:600px;margin:0 0 18px">Choose who the results are explained for. The numbers stay the same. The charts shown and the wording under them change.</p>
+      <div class="grid2" style="grid-template-columns:1fr 1fr">
+        <div>
+          <div class="toggle" role="group" aria-label="Audience">
+            <button type="button" data-aud="everyone" aria-pressed="true">Everyone</button>
+            <button type="button" data-aud="technical" aria-pressed="false">Technical</button>
+          </div>
+          <ul class="plain" id="audlist"></ul>
+        </div>
+        <div class="card">
+          <h3>Do discounts hurt profit?</h3>
+          <svg class="wire" id="exchart" viewBox="0 0 420 230" role="img" aria-label="Average profit per order line by discount band"></svg>
+          <p class="chart-note" id="exnote"></p>
+          <p class="fine">Example from the generated sample sales data, not from a real company.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="start" class="block" data-stage="0">
+    <div class="wrap" style="max-width:720px">
+      <p class="eyebrow">Try it</p>
+      <h2>Bring a table, get the report</h2>
+      <p style="color:#CFCBBE;margin:0 0 22px">Accepted files: CSV, TSV, Excel, JSON, Parquet and SQLite. Large tables are sampled so the analysis stays quick.</p>
+      <label class="drop" id="drop" for="file">Choose a file or drop it here<input id="file" type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.json,.parquet,.db,.sqlite"></label>
+      <div class="row" style="margin-top:14px">
+        <button class="btn primary" id="analyse" type="button">Analyse</button>
+      </div>
+      <p class="status" id="status" role="status">No file chosen.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>DATADUO</span>
+    <span>Built with Python, pandas, scikit-learn, XGBoost and Plotly.</span>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+<script>
+/* ============================ settings you may change ============================ */
+const API_URL = "http://127.0.0.1:8000/api/analyze";   // the analysis server, added in the next step
+const COLORS = { bone: "#EDE6D3", amber: "#E3A857", mint: "#7FD1A0" };
+
+/* ================================ particle shapes ================================ */
+// SHAPES START
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(6.283185307*v);}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+
+// stage 0: raw rows, a loose cloud
+function shapeCloud(n,r){const a=new Float32Array(n*3);
+  for(let i=0;i<n;i++){const k=r()<0.05?2.0:1;
+    a[i*3]=clamp(gauss(r)*0.95*k,-3.4,3.4);a[i*3+1]=clamp(gauss(r)*0.65*k,-2.4,2.4);a[i*3+2]=clamp(gauss(r)*0.8*k,-2.6,2.6);}
+  return a;}
+
+// stage 1: a table, points on a regular grid of columns, rows and layers
+function shapeLattice(n,r){const cols=120,rows=72,layers=Math.max(1,Math.ceil(n/(cols*rows))),a=new Float32Array(n*3);
+  for(let i=0;i<n;i++){const c=i%cols,rw=Math.floor(i/cols)%rows,l=Math.floor(i/(cols*rows))%layers;
+    a[i*3]=(c/(cols-1)-0.5)*4.6;a[i*3+1]=(0.5-rw/(rows-1))*2.9;a[i*3+2]=(layers>1?(l/(layers-1)-0.5):0)*0.9;}
+  return a;}
+
+// stage 2: a 3D bar chart with two rows of bars and two axes
+function shapeBars(n,r){const heights=[0.9,1.5,1.2,2.1,1.7,2.5,2.0,2.9,2.3,3.2,2.7],nb=heights.length,gap=0.43,w=0.30,d=0.30,x0=-(nb-1)*gap/2;
+  const boxes=[];let total=0;
+  for(const z of [-0.45,0.45])for(let b=0;b<nb;b++){const h=heights[b]*(z<0?0.8:1.0);boxes.push({x:x0+b*gap,z:z,h:h});total+=h;}
+  const a=new Float32Array(n*3);
+  for(let i=0;i<n;i++){
+    if(r()<0.06){const t=r();
+      if(t<0.6){a[i*3]=(r()-0.5)*5.2;a[i*3+1]=-1.5;a[i*3+2]=0.9;}
+      else{a[i*3]=-2.6;a[i*3+1]=-1.5+r()*3.6;a[i*3+2]=0.9;}
+      continue;}
+    let pick=r()*total,bi=0;for(;bi<boxes.length-1;bi++){pick-=boxes[bi].h;if(pick<=0)break;}
+    const bx=boxes[bi];a[i*3]=bx.x+(r()-0.5)*w;a[i*3+1]=-1.5+r()*bx.h;a[i*3+2]=bx.z+(r()-0.5)*d;}
+  return a;}
+
+// stage 3: a fitted surface with scattered data points around it
+function shapeSurface(n,r){const a=new Float32Array(n*3);
+  for(let i=0;i<n;i++){const x=(r()-0.5)*5.0,z=(r()-0.5)*3.4;
+    let y=0.8*Math.sin(x*1.3+0.5)*Math.cos(z*1.1)+0.16*x-0.1;
+    y+=r()<0.16?gauss(r)*0.3:(r()-0.5)*0.02;
+    a[i*3]=x;a[i*3+1]=y;a[i*3+2]=z;}
+  return a;}
+// SHAPES END
+
+/* ================================ 3D background ================================== */
+(function(){
+  const reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const canvas=document.getElementById("bg");
+  if(!window.THREE){document.body.classList.add("no-webgl");return;}
+  let renderer;
+  try{renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:false,alpha:true,powerPreference:"high-performance"});}
+  catch(e){document.body.classList.add("no-webgl");return;}
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  renderer.setClearColor(0x000000,0);
+
+  const small=Math.min(innerWidth,innerHeight)<700||matchMedia("(pointer: coarse)").matches;
+  const N=small?14000:34000;
+  const r=rng(20241029);
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute("position",new THREE.BufferAttribute(shapeCloud(N,r),3));
+  geo.setAttribute("s1",new THREE.BufferAttribute(shapeLattice(N,r),3));
+  geo.setAttribute("s2",new THREE.BufferAttribute(shapeBars(N,r),3));
+  geo.setAttribute("s3",new THREE.BufferAttribute(shapeSurface(N,r),3));
+  const rnd=new Float32Array(N*4);for(let i=0;i<rnd.length;i++)rnd[i]=r();
+  geo.setAttribute("rnd",new THREE.BufferAttribute(rnd,4));
+
+  const uniforms={
+    uTime:{value:0},uStage:{value:0},uSize:{value:2.7},uPx:{value:renderer.getPixelRatio()},uAlpha:{value:1},
+    cBone:{value:new THREE.Color(COLORS.bone)},cAmber:{value:new THREE.Color(COLORS.amber)},cMint:{value:new THREE.Color(COLORS.mint)}
+  };
+  const material=new THREE.ShaderMaterial({
+    uniforms:uniforms,transparent:true,depthWrite:false,depthTest:false,blending:THREE.AdditiveBlending,
+    vertexShader:[
+      "attribute vec3 s1;attribute vec3 s2;attribute vec3 s3;attribute vec4 rnd;",
+      "uniform float uTime;uniform float uStage;uniform float uSize;uniform float uPx;uniform float uAlpha;",
+      "uniform vec3 cBone;uniform vec3 cAmber;uniform vec3 cMint;",
+      "varying vec3 vCol;varying float vA;",
+      "float ease(float t){return t*t*(3.0-2.0*t);}",
+      "void main(){",
+      "  float t=clamp(uStage,0.0,3.0);",
+      "  vec3 p;",
+      "  if(t<1.0)p=mix(position,s1,ease(t));",
+      "  else if(t<2.0)p=mix(s1,s2,ease(t-1.0));",
+      "  else p=mix(s2,s3,ease(t-2.0));",
+      "  float mid=sin(fract(t)*3.14159265);",
+      "  p+=(rnd.xyz-0.5)*mid*1.8;",
+      "  float ph=rnd.w*6.2831853;",
+      "  p+=vec3(sin(uTime*0.5+ph),cos(uTime*0.42+ph*1.3),sin(uTime*0.37+ph*0.7))*0.03;",
+      "  vec4 mv=modelViewMatrix*vec4(p,1.0);",
+      "  gl_Position=projectionMatrix*mv;",
+      "  gl_PointSize=uSize*uPx*(0.55+rnd.z*0.9)*(7.0/-mv.z);",
+      "  float sel=rnd.x;",
+      "  vCol=sel>0.93?cAmber:(sel<0.05?cMint:cBone);",
+      "  vA=(0.22+0.5*rnd.y)*uAlpha;",
+      "}"].join("\n"),
+    fragmentShader:[
+      "varying vec3 vCol;varying float vA;",
+      "void main(){",
+      "  vec2 c=gl_PointCoord-0.5;float d=length(c);",
+      "  if(d>0.5)discard;",
+      "  float a=smoothstep(0.5,0.05,d);",
+      "  gl_FragColor=vec4(vCol,a*vA);",
+      "}"].join("\n")
+  });
+  const points=new THREE.Points(geo,material);
+  points.frustumCulled=false;
+  const group=new THREE.Group();group.add(points);
+  const scene=new THREE.Scene();scene.add(group);
+  const camera=new THREE.PerspectiveCamera(40,1,0.1,100);camera.position.set(0,0.3,7);camera.lookAt(0,0,0);
+
+  function layout(){
+    const w=innerWidth,h=innerHeight,aspect=w/h,wide=aspect>1.15;
+    renderer.setSize(w,h,false);camera.aspect=aspect;camera.updateProjectionMatrix();
+    group.position.set(wide?Math.min(2.7,aspect*1.1):0,wide?0:0.9,0);
+    group.scale.setScalar(wide?0.95:Math.max(0.55,aspect*0.95));
+    uniforms.uAlpha.value=wide?1.0:0.5;
+    uniforms.uPx.value=renderer.getPixelRatio();
+  }
+  layout();addEventListener("resize",function(){layout();if(reduce)renderOnce();});
+
+  let target=0,stage=0,mouseX=0,mouseY=0,mx=0,my=0,time=0,last=performance.now(),raf=0;
+  addEventListener("pointermove",function(e){mouseX=e.clientX/innerWidth*2-1;mouseY=e.clientY/innerHeight*2-1;});
+
+  function pose(){
+    group.rotation.y=Math.sin(time*0.14)*0.5+mx*0.28;
+    group.rotation.x=-0.06+my*0.12+Math.sin(time*0.11)*0.04;
+    uniforms.uTime.value=time;uniforms.uStage.value=stage;
+  }
+  function renderOnce(){stage=target;pose();renderer.render(scene,camera);}
+  function frame(now){
+    const dt=Math.min((now-last)/1000,0.05);last=now;time+=dt;
+    stage+=(target-stage)*(1-Math.exp(-dt*2.0));
+    mx+=(mouseX-mx)*(1-Math.exp(-dt*3.0));my+=(mouseY-my)*(1-Math.exp(-dt*3.0));
+    pose();renderer.render(scene,camera);raf=requestAnimationFrame(frame);
+  }
+
+  const io=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){if(e.isIntersecting){target=parseFloat(e.target.dataset.stage);if(reduce)renderOnce();}});
+  },{rootMargin:"-45% 0px -45% 0px"});
+  document.querySelectorAll("[data-stage]").forEach(function(s){io.observe(s);});
+
+  if(reduce){renderOnce();}
+  else{
+    raf=requestAnimationFrame(frame);
+    document.addEventListener("visibilitychange",function(){
+      if(document.hidden){cancelAnimationFrame(raf);}else{last=performance.now();raf=requestAnimationFrame(frame);}
+    });
+  }
+})();
+
+/* ============================== report page explorer ============================= */
+(function(){
+  const PAGES=[
+    {id:"exec",name:"Executive Overview",q:"How is the business doing overall?",
+     kpis:["Total sales","Total profit","Profit margin","Orders","Customers","Avg order value"],
+     charts:["Sales and profit by month","Top products by sales","Sales by category","Sales by region"],
+     extra:["Top customers by sales","Sales by customer segment"]},
+    {id:"sales",name:"Sales Analysis",q:"How are sales moving over time?",
+     kpis:["Total sales","Average per month","Best month","Last 3 months"],
+     charts:["Sales trend","Month-over-month growth","Which day of the week sells most?","Seasonality: which months are strongest?"],
+     extra:["How big is a typical order?","Sales building up over time"]},
+    {id:"product",name:"Product Analysis",q:"Which products drive the results?",
+     kpis:["Products","Categories","Best seller","Top 3 share"],
+     charts:["Top 10 products","Product map: category and product","How concentrated are sales? (products)","Sales vs profit by product"],
+     extra:["Slowest-selling products","Sales by category"]},
+    {id:"customer",name:"Customer Analysis",q:"Who buys from us, and do they come back?",
+     kpis:["Customers","Avg sales / customer","Repeat customers","Top 10% share"],
+     charts:["Top 10 customers","Sales by customer segment","Do customers come back?","New vs returning customers"],
+     extra:["How concentrated are sales? (customers)"]},
+    {id:"geo",name:"Geographical Analysis",q:"Where do we sell the most?",
+     kpis:["Regions","States","Top region","Its share"],
+     charts:["Sales by region","Sales map (US states)","Top states by sales","Where sales come from"],
+     extra:["Profit margin by region"]},
+    {id:"profit",name:"Profitability Analysis",q:"Where do we make or lose money?",
+     kpis:["Total profit","Profit margin","Loss-making lines","Most profitable"],
+     charts:["Profit by category","Do discounts hurt profit?","Products that lose money","Profit by month"],
+     extra:["Profit margin by region"]}
+  ];
+  const esc=function(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");};
+  function wrap(text,max){const words=text.split(" "),lines=[];let cur="";
+    words.forEach(function(w){if((cur+" "+w).trim().length>max){lines.push(cur.trim());cur=w;}else{cur=(cur+" "+w).trim();}});
+    if(cur)lines.push(cur);return lines;}
+
+  function wire(p,index){
+    let s='<rect x="0.5" y="0.5" width="639" height="359" fill="#0A1510" stroke="#26392F"/>';
+    s+='<rect x="0" y="0" width="640" height="3" fill="#E3A857"/>';
+    s+='<text x="14" y="26" font-family="Georgia,serif" font-size="16" fill="#F4F0E4">'+esc(p.name)+'</text>';
+    s+='<text x="626" y="26" text-anchor="end" font-family="monospace" font-size="10" fill="#E3A857">PAGE '+(index+1)+' OF 6</text>';
+    p.kpis.slice(0,6).forEach(function(k,i){const y=52+i*48;
+      s+='<rect x="12" y="'+y+'" width="140" height="40" fill="#0D1B15" stroke="#26392F"/>';
+      s+='<text x="22" y="'+(y+24)+'" font-family="monospace" font-size="9.5" fill="#9AA99F">'+esc(k.toUpperCase())+'</text>';});
+    p.charts.slice(0,4).forEach(function(c,i){const x=164+(i%2)*239,y=52+Math.floor(i/2)*152;
+      s+='<rect x="'+x+'" y="'+y+'" width="227" height="140" fill="#0D1B15" stroke="#26392F"/>';
+      wrap(c,30).slice(0,2).forEach(function(line,j){
+        s+='<text x="'+(x+12)+'" y="'+(y+22+j*14)+'" font-family="monospace" font-size="10.5" fill="#E8E4D8">'+esc(line)+'</text>';});
+      s+='<line x1="'+(x+12)+'" y1="'+(y+112)+'" x2="'+(x+12)+'" y2="'+(y+128)+'" stroke="#E3A857"/>';
+      s+='<text x="'+(x+20)+'" y="'+(y+124)+'" font-family="monospace" font-size="9" fill="#9AA99F">One or two sentences explain this chart</text>';});
+    return s;}
+
+  const list=document.getElementById("pagelist");
+  function select(i){
+    const p=PAGES[i];
+    list.querySelectorAll("button").forEach(function(b,j){b.setAttribute("aria-pressed",j===i?"true":"false");});
+    document.getElementById("pgname").textContent=p.name;
+    document.getElementById("pgq").textContent=p.q;
+    document.getElementById("wire").innerHTML=wire(p,i);
+    document.getElementById("pgextra").textContent="Technical edition adds: "+p.extra.join("; ")+".";
+  }
+  PAGES.forEach(function(p,i){
+    const b=document.createElement("button");b.type="button";
+    b.innerHTML="<span>Page "+(i+1)+"</span>"+esc(p.name);
+    b.addEventListener("click",function(){select(i);});
+    list.appendChild(b);
+  });
+  select(0);
+})();
+
+/* ================================ audience example =============================== */
+(function(){
+  const bands=[["0%",155.3],["10%",86.6],["20%",24.6],["30%",-25.9],["40%",-54.7],["50%",-168.6]];
+  const svg=document.getElementById("exchart");
+  const top=22,bottom=178,left=50,bw=40,gap=22;
+  const max=Math.max.apply(null,bands.map(function(b){return b[1];})),min=Math.min.apply(null,bands.map(function(b){return b[1];}));
+  const y=function(v){return top+(max-v)*(bottom-top)/(max-min);};
+  let s='<line x1="'+(left-8)+'" y1="'+y(0)+'" x2="410" y2="'+y(0)+'" stroke="#9AA99F" stroke-dasharray="3 3"/>';
+  bands.forEach(function(b,i){const x=left+i*(bw+gap),v=b[1],y0=y(0),y1=y(v),pos=v>=0;
+    s+='<rect x="'+x+'" y="'+Math.min(y0,y1)+'" width="'+bw+'" height="'+Math.abs(y1-y0)+'" fill="'+(pos?"#7FD1A0":"#E8604C")+'"/>';
+    s+='<text x="'+(x+bw/2)+'" y="'+(pos?y1-5:y1+13)+'" text-anchor="middle" font-family="monospace" font-size="10" fill="#E8E4D8">'+Math.round(v)+'</text>';
+    s+='<text x="'+(x+bw/2)+'" y="206" text-anchor="middle" font-family="monospace" font-size="10" fill="#9AA99F">'+b[0]+'</text>';});
+  s+='<text x="'+(left-8)+'" y="224" font-family="monospace" font-size="10" fill="#9AA99F">Discount given. Bars show average profit per order line.</text>';
+  svg.innerHTML=s;
+
+  const copy={
+    everyone:{note:"Profit turns negative from about 30% discount. Deeper discounts lose money.",
+      items:["Four charts per page, chosen to tell the main story.","Plain sentences under every chart.","One sentence on whether the model beats guessing.","Words such as baseline and cross-validation are explained."]},
+    technical:{note:"Mean profit per order line by discount band. Correlation of discount with profit r = -0.47.",
+      items:["Up to six charts per page, with extra diagnostics.","Notes give the statistic used and its main caveat.","Score table with standard deviations for every model.","Correlation matrix and distributions by outcome."]}
+  };
+  const btns=document.querySelectorAll("[data-aud]");
+  function show(k){
+    btns.forEach(function(b){b.setAttribute("aria-pressed",b.dataset.aud===k?"true":"false");});
+    document.getElementById("exnote").textContent=copy[k].note;
+    document.getElementById("audlist").innerHTML=copy[k].items.map(function(t){return "<li>"+t+"</li>";}).join("");
+  }
+  btns.forEach(function(b){b.addEventListener("click",function(){show(b.dataset.aud);});});
+  show("everyone");
+})();
+
+/* ================================== file upload ================================== */
+(function(){
+  const input=document.getElementById("file"),status=document.getElementById("status"),drop=document.getElementById("drop");
+  const size=function(n){return n>1e6?(n/1e6).toFixed(1)+" MB":Math.max(1,Math.round(n/1e3))+" KB";};
+  function chosen(){const f=input.files[0];status.textContent=f?("Selected: "+f.name+" ("+size(f.size)+")"):"No file chosen.";}
+  input.addEventListener("change",chosen);
+  ["dragenter","dragover"].forEach(function(t){drop.addEventListener(t,function(e){e.preventDefault();drop.classList.add("over");});});
+  ["dragleave","drop"].forEach(function(t){drop.addEventListener(t,function(e){e.preventDefault();drop.classList.remove("over");});});
+  drop.addEventListener("drop",function(e){if(e.dataTransfer&&e.dataTransfer.files.length){input.files=e.dataTransfer.files;chosen();}});
+  document.getElementById("analyse").addEventListener("click",async function(){
+    const f=input.files[0];
+    if(!f){status.textContent="Choose a file first.";return;}
+    status.textContent="Sending "+f.name+"...";
+    try{
+      const fd=new FormData();fd.append("file",f);
+      const res=await fetch(API_URL,{method:"POST",body:fd});
+      if(!res.ok)throw new Error("HTTP "+res.status);
+      status.textContent="The server accepted the file. The results view is added in the next step.";
+    }catch(e){
+      status.textContent="The analysis server is not connected to this page yet. For now, run the Streamlit app to analyse files.";
+    }
+  });
+})();
+</script>
+</body>
+</html>
