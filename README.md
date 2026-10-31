@@ -2,8 +2,8 @@
 
 **Upload any table of data. DATADUO works out what kind of data it is, cleans it, builds the right dashboard, trains and checks prediction models, and explains everything in plain English, with no code required.**
 
-> 🔗 **Live demo:** [add your Streamlit Cloud link here]
-> 🎓 BCA Final Year Project · Alliance University · Poojashree H 
+> 🔗 **Live demo:** https://dataduo.streamlit.app/
+>** 🎓 BCA Final Year Project · Alliance University · Poojashree H **
 
 ---
 
